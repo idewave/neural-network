@@ -301,7 +301,7 @@ impl<N: PartialEq> PartialEq for Matrix<N> {
     }
 }
 
-impl <N> Neg for Matrix<N> where N: Numeric {
+impl<N> Neg for Matrix<N> where N: Numeric {
     type Output = Matrix<N>;
 
     fn neg(self) -> Self::Output {
@@ -511,8 +511,8 @@ mod tests {
         let matrix_c: Matrix<f64> = matrix_a + matrix_b;
 
         assert_eq!(matrix_c.data, vec![2.0, 4.0, 6.0, 8.0]);
-        assert_eq!(matrix_c.rows, ROWS_2);
-        assert_eq!(matrix_c.cols, COLS_2);
+        assert_eq!(matrix_c.shape.rows, ROWS_2);
+        assert_eq!(matrix_c.shape.cols, COLS_2);
     }
 
     #[test]
@@ -537,8 +537,8 @@ mod tests {
 
         let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b).unwrap();
         assert_eq!(matrix_c.data, vec![7.0, 10.0, 15.0, 22.0]);
-        assert_eq!(matrix_c.rows, ROWS_2);
-        assert_eq!(matrix_c.cols, COLS_2);
+        assert_eq!(matrix_c.shape.rows, ROWS_2);
+        assert_eq!(matrix_c.shape.cols, COLS_2);
     }
 
     #[test]
@@ -551,8 +551,8 @@ mod tests {
 
         let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b).unwrap();
         assert_eq!(matrix_c.data, vec![14.0, 32.0, 50.0]);
-        assert_eq!(matrix_c.rows, ROWS_3);
-        assert_eq!(matrix_c.cols, COLS_1);
+        assert_eq!(matrix_c.shape.rows, ROWS_3);
+        assert_eq!(matrix_c.shape.cols, COLS_1);
     }
 
     #[test]
