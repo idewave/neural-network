@@ -104,6 +104,7 @@ pub struct Shape {
 #[derive(Debug, Clone, Default)]
 pub struct Matrix<N> {
     pub shape: Shape,
+    pub size: usize,
     data: Vec<N>,
 }
 
@@ -111,6 +112,7 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
     pub fn new(rows: usize, cols: usize) -> Self {
         Self {
             shape: Shape { rows, cols },
+            size: rows * cols,
             data: (0..rows * cols).map(|_| N::default()).collect(),
         }
     }
@@ -118,6 +120,7 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
     pub fn new_empty(rows: usize, cols: usize) -> Self {
         Self {
             shape: Shape { rows, cols },
+            size: rows * cols,
             data: vec![],
         }
     }
@@ -145,6 +148,10 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
         self
     }
 
+    pub fn all(mut self, mut callback: Box<dyn FnMut(N) -> bool>) -> bool {
+        self.data.iter().all(|item| callback(item.clone()))
+    }
+
     pub fn reduce_by_cols(&mut self, mut callback: Box<dyn FnMut(N, N) -> N>) {
         let mut new_data: Vec<N> = vec![];
         for i in (0 .. self.data.len()).step_by(self.shape.cols) {
@@ -159,14 +166,6 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
         self.shape.cols = 1;
     }
 
-    pub fn is_empty(matrix: &Self) -> bool {
-        matrix.data.is_empty()
-    }
-
-    pub fn has_equal_size(source: &Self, target: &Self) -> bool {
-        source.shape.cols == target.shape.cols && source.shape.rows == target.shape.rows
-    }
-
     pub fn transpose(&mut self) -> Self {
         let mut output = Matrix::new(self.shape.cols, self.shape.rows);
         for i in 0..self.shape.rows {
@@ -178,12 +177,14 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
     }
 
     fn stretch(mut self, axis: i32, size: usize) -> Self {
+        let origin = self.data.clone();
+
         match axis {
             0 => {
                 self.shape.rows = size;
 
                 for _ in 0..size {
-                    self.data.extend_from_slice(&self.data.clone())
+                    self.data.extend_from_slice(&origin);
                 }
 
                 self
@@ -192,7 +193,7 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
                 self.shape.cols = size;
 
                 for _ in 0..size {
-                    self.data.extend_from_slice(&self.data.clone())
+                    self.data.extend_from_slice(&origin);
                 }
 
                 self
@@ -226,6 +227,14 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
             }
         }
     }
+
+    pub fn is_empty(matrix: &Self) -> bool {
+        matrix.data.is_empty()
+    }
+
+    pub fn has_equal_size(source: &Self, target: &Self) -> bool {
+        source.shape.cols == target.shape.cols && source.shape.rows == target.shape.rows
+    }
 }
 
 impl<N> Matrix<N> where N: Numeric {
@@ -236,20 +245,13 @@ impl<N> Matrix<N> where N: Numeric {
         self
     }
 
-    pub fn dot(&mut self, mut other: &mut Self) -> Result<Self, Error> {
-        if self.shape.cols != other.shape.rows {
-            return Err(
-                Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "Cannot multiply matrices A ({:?}) and B ({:?}), \
-                        please check first matrix cols amount equals to second matrix rows amount",
-                        self.shape,
-                        other.shape
-                    )
-                )
-            )
-        }
+    pub fn dot(&mut self, other: &mut Self) -> Self {
+        assert_eq!(
+            self.shape.cols, other.shape.rows,
+            "Cannot multiply matrices A ({:?}) and B ({:?}), \
+            please check first matrix cols amount equals to second matrix rows amount",
+            self.shape, other.shape
+        );
 
         let mut output = Matrix::new_empty(self.shape.rows, other.shape.cols);
 
@@ -257,14 +259,13 @@ impl<N> Matrix<N> where N: Numeric {
             for j in 0..output.shape.cols {
                 let mut item = N::default();
                 for k in 0..other.shape.rows {
-                    item += self.get_item(i, k).unwrap().clone()
-                        * other.get_item(k, j).unwrap().clone();
+                    item += self.get_item(i, k).unwrap().clone() * other.get_item(k, j).unwrap().clone();
                 }
                 output.data.push(item);
             }
         }
 
-        Ok(output)
+        output
     }
 
     pub fn sum(&self) -> N {
@@ -535,7 +536,7 @@ mod tests {
         matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
         matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
 
-        let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b).unwrap();
+        let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b);
         assert_eq!(matrix_c.data, vec![7.0, 10.0, 15.0, 22.0]);
         assert_eq!(matrix_c.shape.rows, ROWS_2);
         assert_eq!(matrix_c.shape.cols, COLS_2);
@@ -549,7 +550,7 @@ mod tests {
         matrix_a.assign(MATRIX_SAMPLE_3X3.to_vec()).unwrap();
         matrix_b.assign(MATRIX_SAMPLE_3X1.to_vec()).unwrap();
 
-        let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b).unwrap();
+        let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b);
         assert_eq!(matrix_c.data, vec![14.0, 32.0, 50.0]);
         assert_eq!(matrix_c.shape.rows, ROWS_3);
         assert_eq!(matrix_c.shape.cols, COLS_1);
@@ -564,7 +565,7 @@ mod tests {
         matrix_a.assign(MATRIX_SAMPLE_2X3.to_vec()).unwrap();
         matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
 
-        let matrix_c = matrix_a.dot(&mut matrix_b).unwrap();
+        let matrix_c = matrix_a.dot(&mut matrix_b);
     }
 
     #[test]

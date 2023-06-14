@@ -1,14 +1,15 @@
-extern crate core;
-
 mod math;
 mod transform;
+mod dataset;
 
 use std::io::{ErrorKind, Error};
 use rand::{Rng, thread_rng};
 use std::f64::consts::E as EXPONENT;
 use std::ops::Mul;
+use crate::dataset::{generate_image_dataset, read_vector_from_file, write_vector_to_file};
 
 use crate::math::matrix::Matrix;
+use crate::transform::image::image_to_vector;
 
 struct NeuralNetwork {
     layers: Vec<Layer>,
@@ -25,43 +26,63 @@ impl NeuralNetwork {
         Self { layers }
     }
 
-    pub fn predict(&mut self, inputs: Vec<f64>) -> Matrix<f64> {
-        let mut predictions = Matrix::new(1, inputs.len());
-        predictions.assign(inputs).unwrap();
+    pub fn predict(&mut self, input: Matrix<f64>, mut output: Matrix<f64>) -> Matrix<f64> {
+        let examples_count = input.shape.cols;
+        let mut normalized_predictions = Matrix::new_empty(1, examples_count);
+        let mut predictions = input.clone();
 
-        for i in 1..self.layers.len() {
-            predictions = self.layers[i].forward(predictions.clone());
+        for i in 0..self.layers.len() {
+            predictions = self.layers[i].forward(predictions);
         }
+
+        let mut data = vec![];
+        for i in 0..predictions.shape.cols {
+            data.push(if *predictions.get_item(0, i).unwrap() > 0.5 { 1. } else { 0. });
+        }
+        normalized_predictions.assign(data).unwrap();
+
+        let accuracy_data = (0..predictions.size)
+            .map(|i| {
+                let a = normalized_predictions.get_item(0, i).unwrap();
+                let b = output.get_item(0, i).unwrap();
+                if a == b { 1. } else { 0. }
+            }).collect::<Vec<f64>>();
+
+        let mut accuracy = Matrix::new(1, normalized_predictions.shape.cols);
+        accuracy.assign(accuracy_data).unwrap();
+
+        println!("Accuracy: {:?}", (accuracy / examples_count as f64).sum());
 
         predictions
     }
 
     pub fn train(
         &mut self,
-        inputs: Vec<f64>,
-        outputs: Vec<f64>,
+        inputs: Matrix<f64>,
+        outputs: Matrix<f64>,
         learning_rate: f64,
         iterations_count: usize,
     ) {
         for k in 0..iterations_count {
-            let mut predictions = Matrix::new(1, inputs.len());
-            predictions.assign(inputs.clone()).unwrap();
+            let mut predictions = inputs.clone();
+            let mut expected = outputs.clone();
 
-            let mut expected = Matrix::new(1, inputs.len());
-            expected.assign(outputs.clone()).unwrap();
-
-            for i in 1..self.layers.len() {
-                predictions = self.layers[i].forward(predictions.clone());
+            for i in 0..self.layers.len() {
+                predictions = self.layers[i].forward(predictions);
             }
 
-            if k % 100 == 0 {
-                let cost = Self::compute_cost(&mut predictions, &mut expected);
-                println!("Cost after: {:?} iteration: {:?}", k, cost);
-            }
+            // if k % 100 == 0 {
+            //     let cost = Self::compute_cost(&mut predictions, &mut expected);
+            //     println!("Cost after: {:?} iteration: {:?}", k, cost);
+            // }
+
+            let cost = Self::compute_cost(&mut predictions, &mut expected);
+            println!("Cost after: {:?} iteration: {:?}", k, cost);
 
             // cross entropy
+            let epsilon = 1e-8;
             let a = expected.clone() / predictions.clone();
-            let b = (1. - expected.clone()) / (1. - predictions.clone());
+            let b = ((1. - expected.clone()) + epsilon) / ((1. - predictions.clone()) + epsilon);
             // d_cross_entropy
             let mut d_activation = -(a - b);
 
@@ -115,7 +136,7 @@ impl Layer {
     }
 
     pub fn init_weights(&mut self, prev_units_count: usize) {
-        self.weights = Matrix::new(self.units_count, prev_units_count).randomize(0., 1.);
+        self.weights = Matrix::new(self.units_count, prev_units_count).randomize(0., 1.) * 0.01;
     }
 
     pub fn update_parameters(
@@ -129,11 +150,12 @@ impl Layer {
     }
 
     pub fn forward(&mut self, mut input: Matrix<f64>) -> Matrix<f64> {
-        let mut linear_activation = self.weights.dot(&mut input).unwrap() + self.biases.clone();
+        let mut linear_activation = self.weights.dot(&mut input) + self.biases.clone();
 
         let output = match self.activation_type {
             ActivationType::Sigmoid => {
-                Layer::sigmoid(linear_activation)
+                let result = Layer::sigmoid(linear_activation);
+                result
             },
             ActivationType::Tanh => {
                 Layer::tanh(linear_activation)
@@ -149,7 +171,6 @@ impl Layer {
         self.cache = Cache {
             // prev activation
             input,
-            weights: self.weights.clone(),
             // current activation
             output: output.clone(),
         };
@@ -176,10 +197,10 @@ impl Layer {
         };
 
         // dW
-        let d_weights = d_activation.dot(&mut self.cache.input.transpose()).unwrap() / m;
+        let d_weights = d_activation.dot(&mut self.cache.input.transpose()) / m;
         // db
         let d_biases = d_activation.x_axis_sum() / m;
-        let d_activation_prev = self.weights.transpose().dot(&mut d_activation).unwrap();
+        let d_activation_prev = self.weights.transpose().dot(&mut d_activation);
 
         (d_activation_prev, d_weights, d_biases)
     }
@@ -203,7 +224,6 @@ impl Layer {
 
 #[derive(Debug, Clone, Default)]
 struct Cache {
-    pub weights: Matrix<f64>,
     pub input: Matrix<f64>,
     pub output: Matrix<f64>,
 }
@@ -223,21 +243,51 @@ impl Default for ActivationType {
 }
 
 fn main() {
-    // training on factorial dataset
-    let input = vec![0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10.];
-    let output = vec![1., 1., 2., 6., 24., 120., 720., 5040., 40320., 362880., 3628800.];
+    let input_data: Vec<Vec<f64>> = read_vector_from_file("./src/input.bin").unwrap();
+    let output_data: Vec<f64> = read_vector_from_file("./src/output.bin").unwrap();
 
-    let learning_rate = 0.0075;
-    let iterations_count = 1;
-    let features_count = 1;
+    let learning_rate = 0.005;
+    let iterations_count = 25;
+    let features_count = input_data[1].len();
+
+    let mut input: Matrix<f64> = Matrix::new(input_data[0].len(), input_data.len());
+    input.assign(input_data.into_iter().flatten().collect()).unwrap();
+
+    let mut output: Matrix<f64> = Matrix::new(1, output_data.len());
+    output.assign(output_data).unwrap();
 
     let mut nn = NeuralNetwork::new(features_count, vec![
-        Layer::new(features_count, ActivationType::Relu),
         Layer::new(5, ActivationType::Relu),
-        Layer::new(30, ActivationType::Relu),
+        Layer::new(5, ActivationType::Relu),
         Layer::new(1, ActivationType::Sigmoid),
     ]);
 
-    nn.train(input, output, learning_rate, iterations_count);
-    // let prediction = nn.predict(vec![0., 1., 2., 3., 4.]);
+    nn.train(input / 255., output.clone(), learning_rate, iterations_count);
+
+    // check accuracy with test data
+    let input_data: Vec<Vec<f64>> = read_vector_from_file("./src/input_test.bin").unwrap();
+    let mut input: Matrix<f64> = Matrix::new(input_data[0].len(), input_data.len());
+    input.assign(input_data.into_iter().flatten().collect()).unwrap();
+
+    let output_data: Vec<f64> = read_vector_from_file("./src/output_test.bin").unwrap();
+    let mut output: Matrix<f64> = Matrix::new(1, output_data.len());
+    output.assign(output_data).unwrap();
+
+    nn.predict(input / 255., output);
+
+    // check accuracy on own data
+    // let input_data: Vec<Vec<f64>> = vec![
+    //     image_to_vector("./src/dataset/test_cat.jpg"),
+    //     image_to_vector("./src/dataset/test_cat2.jpg"),
+    //     image_to_vector("./src/dataset/test_dog1.jpg"),
+    // ];
+    // let mut input: Matrix<f64> = Matrix::new(input_data[0].len(), input_data.len());
+    // input.assign(input_data.into_iter().flatten().collect()).unwrap();
+    //
+    // let output_data: Vec<f64> = vec![0., 0., 1.];
+    // let mut output: Matrix<f64> = Matrix::new(1, output_data.len());
+    // output.assign(output_data).unwrap();
+    //
+    // let predictions = nn.predict(input / 255., output);
+    // println!("{:?}", predictions);
 }

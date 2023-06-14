@@ -1,6 +1,6 @@
 use image::GenericImageView;
 
-fn image_to_vector(image_path: &str) -> Vec<f32> {
+pub fn image_to_vector(image_path: &str) -> Vec<f64> {
     let image = image::open(image_path).expect("Cannot load");
     let resized_image = image.resize_exact(28, 28, image::imageops::FilterType::Lanczos3);
 
@@ -9,9 +9,9 @@ fn image_to_vector(image_path: &str) -> Vec<f32> {
     let mut vector = Vec::new();
 
     for pixel in pixels {
-        let r = pixel[0] as f32 / 255.0;
-        let g = pixel[1] as f32 / 255.0;
-        let b = pixel[2] as f32 / 255.0;
+        let r = pixel[0] as f64 / 255.0;
+        let g = pixel[1] as f64 / 255.0;
+        let b = pixel[2] as f64 / 255.0;
 
         vector.push(r);
         vector.push(g);

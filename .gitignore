@@ -14,3 +14,5 @@ Cargo.lock
 *.pdb
 # misc
 .idea
+**/*.{png,jpg,jpeg,jpg}
+**/*.bin
