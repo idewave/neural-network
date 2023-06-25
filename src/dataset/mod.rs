@@ -8,7 +8,7 @@ pub fn generate_image_dataset(mut paths: Vec<&str>) -> (Vec<Vec<f64>>, Vec<f64>)
     let mut outputs = vec![];
 
     for label in 0..paths.len() {
-        println!("Parsing files in: {:?}", paths[label]);
+        println!("Parsing files in: {:?} -> [label: {:?}]", paths[label], label);
         let mut dir = std::fs::read_dir(paths[label]).unwrap();
         let input = dir.by_ref().into_iter()
             .map(|path| {

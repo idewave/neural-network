@@ -26,7 +26,7 @@ impl NeuralNetwork {
         Self { layers }
     }
 
-    pub fn predict(&mut self, input: Matrix<f64>, mut output: Matrix<f64>) -> Matrix<f64> {
+    pub fn predict(&mut self, input: Matrix<f64>, mut output: Matrix<f64>) -> Vec<f64> {
         let examples_count = input.shape.cols;
         let mut normalized_predictions = Matrix::new_empty(1, examples_count);
         let mut predictions = input.clone();
@@ -39,7 +39,7 @@ impl NeuralNetwork {
         for i in 0..predictions.shape.cols {
             data.push(if *predictions.get_item(0, i).unwrap() > 0.5 { 1. } else { 0. });
         }
-        normalized_predictions.assign(data).unwrap();
+        normalized_predictions.assign(data);
 
         let accuracy_data = (0..predictions.size)
             .map(|i| {
@@ -49,11 +49,11 @@ impl NeuralNetwork {
             }).collect::<Vec<f64>>();
 
         let mut accuracy = Matrix::new(1, normalized_predictions.shape.cols);
-        accuracy.assign(accuracy_data).unwrap();
+        accuracy.assign(accuracy_data.to_vec());
 
         println!("Accuracy: {:?}", (accuracy / examples_count as f64).sum());
 
-        predictions
+        accuracy_data
     }
 
     pub fn train(
@@ -63,6 +63,8 @@ impl NeuralNetwork {
         learning_rate: f64,
         iterations_count: usize,
     ) {
+        let mut prev_cost = 0.0;
+
         for k in 0..iterations_count {
             let mut predictions = inputs.clone();
             let mut expected = outputs.clone();
@@ -76,19 +78,26 @@ impl NeuralNetwork {
             //     println!("Cost after: {:?} iteration: {:?}", k, cost);
             // }
 
-            let cost = Self::compute_cost(&mut predictions, &mut expected);
-            println!("Cost after: {:?} iteration: {:?}", k, cost);
+            let current_cost = Self::compute_cost(&mut predictions, &mut expected);
+            println!(
+                "Cost after: {:?} iteration: {:?} [{:?}]",
+                k,
+                current_cost,
+                if current_cost >= prev_cost { "+" } else {"-"}
+            );
+            prev_cost = current_cost;
 
             // cross entropy
             let epsilon = 1e-8;
+            // let epsilon = 0.;
             let a = expected.clone() / predictions.clone();
             let b = ((1. - expected.clone()) + epsilon) / ((1. - predictions.clone()) + epsilon);
             // d_cross_entropy
             let mut d_activation = -(a - b);
 
-            for i in (1..self.layers.len()).rev() {
+            for i in (0..self.layers.len()).rev() {
                 let (d_activation_prev, d_weights, d_biases) = self.layers[i].backward(
-                    &mut d_activation
+                    d_activation
                 );
 
                 d_activation = d_activation_prev;
@@ -129,7 +138,7 @@ impl Layer {
         Self {
             units_count,
             weights: Matrix::default(),
-            biases: Matrix::new(units_count, 1).randomize(0., 1.),
+            biases: Matrix::new(units_count, 1),//.randomize(-1., 1.),
             activation_type,
             cache: Cache::default(),
         }
@@ -154,17 +163,16 @@ impl Layer {
 
         let output = match self.activation_type {
             ActivationType::Sigmoid => {
-                let result = Layer::sigmoid(linear_activation);
-                result
+                Layer::sigmoid(linear_activation.clone())
             },
             ActivationType::Tanh => {
-                Layer::tanh(linear_activation)
+                Layer::tanh(linear_activation.clone())
             },
             ActivationType::Relu => {
-                Layer::relu(linear_activation)
+                Layer::relu(linear_activation.clone())
             },
             ActivationType::Linear => {
-                linear_activation
+                linear_activation.clone()
             },
         };
 
@@ -178,12 +186,13 @@ impl Layer {
         output
     }
 
-    pub fn backward(&mut self, activation: &mut Matrix<f64>) -> (Matrix<f64>, Matrix<f64>, Matrix<f64>) {
+    pub fn backward(&mut self, mut activation: Matrix<f64>) -> (Matrix<f64>, Matrix<f64>, Matrix<f64>) {
         let m = activation.shape.cols as f64;
 
         let mut d_activation = match self.activation_type {
             ActivationType::Sigmoid => {
-                activation.clone() * (1. - activation.clone())
+                let output = self.cache.output.clone();
+                activation * output.clone() * (1. - output)
             },
             ActivationType::Tanh => {
                 1. - activation.clone().map(Box::new(|x| x * x))
@@ -243,50 +252,71 @@ impl Default for ActivationType {
 }
 
 fn main() {
-    let input_data: Vec<Vec<f64>> = read_vector_from_file("./src/input.bin").unwrap();
-    let output_data: Vec<f64> = read_vector_from_file("./src/output.bin").unwrap();
+    // let input_data: Vec<Vec<f64>> = read_vector_from_file("./src/input_128x128.bin").unwrap();
+    // let output_data: Vec<f64> = read_vector_from_file("./src/output_128x128.bin").unwrap();
 
-    let learning_rate = 0.005;
-    let iterations_count = 25;
+    // let (input_data, output_data) = generate_image_dataset(vec![
+    //     "./src/dataset/test/cats",
+    //     "./src/dataset/test/dogs"
+    // ]);
+    //
+    // write_vector_to_file(input_data.clone(), "input_128x128_test.bin").unwrap();
+    // write_vector_to_file(output_data.clone(), "output_128x128_test.bin").unwrap();
+    //
+    // let (input_data, output_data) = generate_image_dataset(vec![
+    //     "./src/dataset/train/cats",
+    //     "./src/dataset/train/dogs"
+    // ]);
+    //
+    // write_vector_to_file(input_data.clone(), "input_128x128.bin").unwrap();
+    // write_vector_to_file(output_data.clone(), "output_128x128.bin").unwrap();
+
+    let learning_rate = 0.075;
+    let iterations_count = 1000;
     let features_count = input_data[1].len();
 
     let mut input: Matrix<f64> = Matrix::new(input_data[0].len(), input_data.len());
-    input.assign(input_data.into_iter().flatten().collect()).unwrap();
+    input.assign(input_data.into_iter().flatten().collect());
 
     let mut output: Matrix<f64> = Matrix::new(1, output_data.len());
-    output.assign(output_data).unwrap();
+    output.assign(output_data);
 
     let mut nn = NeuralNetwork::new(features_count, vec![
         Layer::new(5, ActivationType::Relu),
-        Layer::new(5, ActivationType::Relu),
+        Layer::new(30, ActivationType::Relu),
+        Layer::new(2, ActivationType::Relu),
         Layer::new(1, ActivationType::Sigmoid),
     ]);
 
     nn.train(input / 255., output.clone(), learning_rate, iterations_count);
 
     // check accuracy with test data
-    let input_data: Vec<Vec<f64>> = read_vector_from_file("./src/input_test.bin").unwrap();
-    let mut input: Matrix<f64> = Matrix::new(input_data[0].len(), input_data.len());
-    input.assign(input_data.into_iter().flatten().collect()).unwrap();
-
-    let output_data: Vec<f64> = read_vector_from_file("./src/output_test.bin").unwrap();
-    let mut output: Matrix<f64> = Matrix::new(1, output_data.len());
-    output.assign(output_data).unwrap();
-
-    nn.predict(input / 255., output);
+    // let input_data: Vec<Vec<f64>> = read_vector_from_file("./src/input_128x128_test.bin").unwrap();
+    // let mut input: Matrix<f64> = Matrix::new(input_data[0].len(), input_data.len());
+    // input.assign(input_data.into_iter().flatten().collect());
+    //
+    // let output_data: Vec<f64> = read_vector_from_file("./src/output_128x128_test.bin").unwrap();
+    // let mut output: Matrix<f64> = Matrix::new(1, output_data.len());
+    // output.assign(output_data);
+    //
+    // nn.predict(input / 255., output);
 
     // check accuracy on own data
     // let input_data: Vec<Vec<f64>> = vec![
     //     image_to_vector("./src/dataset/test_cat.jpg"),
-    //     image_to_vector("./src/dataset/test_cat2.jpg"),
-    //     image_to_vector("./src/dataset/test_dog1.jpg"),
+    //     image_to_vector("./src/dataset/dog1.jpg"),
+    //     image_to_vector("./src/dataset/test_cat2.jpeg"),
+    //     image_to_vector("./src/dataset/test_cat3.jpg"),
+    //     image_to_vector("./src/dataset/test_cat4.jpg"),
+    //     image_to_vector("./src/dataset/test_cat5.jpg"),
+    //     image_to_vector("./src/dataset/test_cat6.png"),
     // ];
     // let mut input: Matrix<f64> = Matrix::new(input_data[0].len(), input_data.len());
-    // input.assign(input_data.into_iter().flatten().collect()).unwrap();
+    // input.assign(input_data.into_iter().flatten().collect());
     //
-    // let output_data: Vec<f64> = vec![0., 0., 1.];
+    // let output_data: Vec<f64> = vec![1., 0., 1., 1., 0., 0., 1.];
     // let mut output: Matrix<f64> = Matrix::new(1, output_data.len());
-    // output.assign(output_data).unwrap();
+    // output.assign(output_data);
     //
     // let predictions = nn.predict(input / 255., output);
     // println!("{:?}", predictions);

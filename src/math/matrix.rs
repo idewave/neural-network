@@ -44,7 +44,7 @@ macro_rules! impl_matrix_ops_for_scalar {
                 type Output = Matrix<$T>;
 
                 fn add(self, mut matrix: Matrix<$T>) -> Self::Output {
-                    matrix.assign(matrix.data.iter().map(|&item| item + self).collect()).unwrap();
+                    matrix.assign(matrix.data.iter().map(|&item| item + self).collect());
 
                     matrix
                 }
@@ -54,7 +54,7 @@ macro_rules! impl_matrix_ops_for_scalar {
                 type Output = Matrix<$T>;
 
                 fn sub(self, mut matrix: Matrix<$T>) -> Self::Output {
-                    matrix.assign(matrix.data.iter().map(|&item| self - item).collect()).unwrap();
+                    matrix.assign(matrix.data.iter().map(|&item| self - item).collect());
 
                     matrix
                 }
@@ -64,7 +64,7 @@ macro_rules! impl_matrix_ops_for_scalar {
                 type Output = Matrix<$T>;
 
                 fn sub(self, mut matrix: &'a mut Matrix<$T>) -> Self::Output {
-                    matrix.assign(matrix.data.iter().map(|&item| self - item).collect()).unwrap();
+                    matrix.assign(matrix.data.iter().map(|&item| self - item).collect());
 
                     matrix.clone()
                 }
@@ -74,7 +74,7 @@ macro_rules! impl_matrix_ops_for_scalar {
                 type Output = Matrix<$T>;
 
                 fn mul(self, mut matrix: Matrix<$T>) -> Self::Output {
-                    matrix.assign(matrix.data.iter().map(|&item| item * self).collect()).unwrap();
+                    matrix.assign(matrix.data.iter().map(|&item| item * self).collect());
 
                     matrix
                 }
@@ -84,7 +84,7 @@ macro_rules! impl_matrix_ops_for_scalar {
                 type Output = Matrix<$T>;
 
                 fn div(self, mut matrix: Matrix<$T>) -> Self::Output {
-                    matrix.assign(matrix.data.iter().map(|&item| self / item).collect()).unwrap();
+                    matrix.assign(matrix.data.iter().map(|&item| self / item).collect());
 
                     matrix
                 }
@@ -125,14 +125,16 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
         }
     }
 
-    pub fn assign(&mut self, data: Vec<N>) -> Result<(), Error> {
-        if data.len() != self.shape.rows * self.shape.cols {
-            return Err(Error::new(ErrorKind::Other, "Dataset size is different from matrix size"));
-        }
+    pub fn assign(&mut self, data: Vec<N>) {
+        assert_eq!(
+            data.len(),
+            self.shape.rows * self.shape.cols,
+            "Dataset size is different from matrix size, expected: {:?}, current: {:?}",
+            self.shape.rows * self.shape.cols,
+            data.len(),
+        );
 
         self.data = data;
-
-        Ok(())
     }
 
     pub fn get_item(&mut self, row: usize, col: usize) -> Option<&mut N> {
@@ -240,7 +242,7 @@ impl<N> Matrix<N> where N: Default + Copy + Clone + Debug {
 impl<N> Matrix<N> where N: Numeric {
     pub fn randomize(mut self, min: N, max: N) -> Self {
         let mut rng = thread_rng();
-        self.data = (0..self.shape.rows * self.shape.cols).map(|_| rng.gen_range(min..max)).collect();
+        self.data = (0..self.shape.rows * self.shape.cols).map(|_| rng.gen_range(min..=max)).collect();
 
         self
     }
@@ -312,7 +314,7 @@ impl<N> Neg for Matrix<N> where N: Numeric {
 
 impl<N> SubAssign<N> for Matrix<N> where N: Numeric {
     fn sub_assign(&mut self, scalar: N) {
-        self.assign(self.data.iter().map(|&item| item - scalar).collect()).unwrap();
+        self.assign(self.data.iter().map(|&item| item - scalar).collect());
     }
 }
 
@@ -325,7 +327,7 @@ impl<N> SubAssign<Matrix<N>> for Matrix<N> where N: Numeric {
                 items.push(*self.get_item(i, j).unwrap() - *matrix.get_item(i, j).unwrap());
             }
         }
-        self.assign(items).unwrap();
+        self.assign(items);
     }
 }
 
@@ -334,7 +336,7 @@ impl<N> Add<N> for Matrix<N> where N: Numeric {
 
     fn add(self, scalar: N) -> Self::Output {
         let mut output = Matrix::new(self.shape.rows, self.shape.cols);
-        output.assign(self.data.iter().map(|&item| item + scalar).collect()).unwrap();
+        output.assign(self.data.iter().map(|&item| item + scalar).collect());
 
         output
     }
@@ -352,7 +354,7 @@ impl<N> Add<Matrix<N>> for Matrix<N> where N: Numeric {
                 items.push(*self.get_item(i, j).unwrap() + *matrix.get_item(i, j).unwrap());
             }
         }
-        output.assign(items).unwrap();
+        output.assign(items);
 
         output
     }
@@ -363,7 +365,7 @@ impl<N> Sub<N> for Matrix<N> where N: Numeric {
 
     fn sub(self, scalar: N) -> Self::Output {
         let mut output = Matrix::new(self.shape.rows, self.shape.cols);
-        output.assign(self.data.iter().map(|&item| item - scalar).collect()).unwrap();
+        output.assign(self.data.iter().map(|&item| item - scalar).collect());
 
         output
     }
@@ -381,7 +383,7 @@ impl<N> Sub<Matrix<N>> for Matrix<N> where N: Numeric {
                 items.push(*self.get_item(i, j).unwrap() - *matrix.get_item(i, j).unwrap());
             }
         }
-        output.assign(items).unwrap();
+        output.assign(items);
 
         output
     }
@@ -392,7 +394,7 @@ impl<N> Mul<N> for Matrix<N> where N: Numeric {
 
     fn mul(self, scalar: N) -> Self::Output {
         let mut output = Matrix::new(self.shape.rows, self.shape.cols);
-        output.assign(self.data.iter().map(|&item| item * scalar).collect()).unwrap();
+        output.assign(self.data.iter().map(|&item| item * scalar).collect());
 
         output
     }
@@ -410,7 +412,7 @@ impl<N> Mul<Matrix<N>> for Matrix<N> where N: Numeric {
                 items.push(*self.get_item(i, j).unwrap() * *matrix.get_item(i, j).unwrap());
             }
         }
-        output.assign(items).unwrap();
+        output.assign(items);
 
         output
     }
@@ -421,7 +423,7 @@ impl<N> Div<N> for Matrix<N> where N: Numeric {
 
     fn div(self, scalar: N) -> Self::Output {
         let mut output = Matrix::new(self.shape.rows, self.shape.cols);
-        output.assign(self.data.iter().map(|&item| item / scalar).collect()).unwrap();
+        output.assign(self.data.iter().map(|&item| item / scalar).collect());
 
         output
     }
@@ -439,7 +441,7 @@ impl<N> Div<Matrix<N>> for Matrix<N> where N: Numeric {
                 items.push(*self.get_item(i, j).unwrap() / *matrix.get_item(i, j).unwrap());
             }
         }
-        output.assign(items).unwrap();
+        output.assign(items);
 
         output
     }
@@ -457,7 +459,7 @@ impl<N> Div<&mut Matrix<N>> for &mut Matrix<N> where N: Numeric {
                 items.push(*self.get_item(i, j).unwrap() / *matrix.get_item(i, j).unwrap());
             }
         }
-        output.assign(items).unwrap();
+        output.assign(items);
 
         output
     }
@@ -482,7 +484,7 @@ mod tests {
     #[test]
     fn test_matrix_creation() {
         let mut matrix: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
-        matrix.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
+        matrix.assign(MATRIX_SAMPLE_2X2.to_vec());
 
         assert_eq!(matrix.data, MATRIX_SAMPLE_2X2.to_vec());
     }
@@ -493,9 +495,9 @@ mod tests {
         let mut matrix_b: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
         let mut matrix_c: Matrix<f64> = Matrix::new(ROWS_2, COLS_3);
 
-        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
-        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
-        matrix_c.assign(MATRIX_SAMPLE_2X3.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec());
+        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec());
+        matrix_c.assign(MATRIX_SAMPLE_2X3.to_vec());
 
         assert_eq!(matrix_a, matrix_b);
         assert_ne!(matrix_a, matrix_c);
@@ -506,8 +508,8 @@ mod tests {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
         let mut matrix_b: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
 
-        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
-        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec());
+        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec());
 
         let matrix_c: Matrix<f64> = matrix_a + matrix_b;
 
@@ -522,8 +524,8 @@ mod tests {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
         let mut matrix_b: Matrix<f64> = Matrix::new(ROWS_3, COLS_2);
 
-        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
-        matrix_b.assign(MATRIX_SAMPLE_3X2.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec());
+        matrix_b.assign(MATRIX_SAMPLE_3X2.to_vec());
 
         let matrix_c: Matrix<f64> = matrix_a + matrix_b;
     }
@@ -533,8 +535,8 @@ mod tests {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
         let mut matrix_b: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
 
-        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
-        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec());
+        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec());
 
         let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b);
         assert_eq!(matrix_c.data, vec![7.0, 10.0, 15.0, 22.0]);
@@ -547,8 +549,8 @@ mod tests {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_3, COLS_3);
         let mut matrix_b: Matrix<f64> = Matrix::new(ROWS_3, COLS_1);
 
-        matrix_a.assign(MATRIX_SAMPLE_3X3.to_vec()).unwrap();
-        matrix_b.assign(MATRIX_SAMPLE_3X1.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_3X3.to_vec());
+        matrix_b.assign(MATRIX_SAMPLE_3X1.to_vec());
 
         let matrix_c: Matrix<f64> = matrix_a.dot(&mut matrix_b);
         assert_eq!(matrix_c.data, vec![14.0, 32.0, 50.0]);
@@ -562,8 +564,8 @@ mod tests {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_3);
         let mut matrix_b: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
 
-        matrix_a.assign(MATRIX_SAMPLE_2X3.to_vec()).unwrap();
-        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X3.to_vec());
+        matrix_b.assign(MATRIX_SAMPLE_2X2.to_vec());
 
         let matrix_c = matrix_a.dot(&mut matrix_b);
     }
@@ -572,13 +574,13 @@ mod tests {
     #[should_panic]
     fn test_wrong_data_size_matrix_assign() {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
-        matrix_a.assign(MATRIX_SAMPLE_2X3.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X3.to_vec());
     }
 
     #[test]
     fn test_get_matrix_single_item() {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
-        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec());
 
         let item = *matrix_a.get_item(0, 1).unwrap();
         assert_eq!(item, MATRIX_SAMPLE_2X2[1]);
@@ -587,26 +589,26 @@ mod tests {
     #[test]
     fn test_get_row() {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_2);
-        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X2.to_vec());
 
         assert_eq!(matrix_a.get_row(0), vec![1., 2.]);
         assert_eq!(matrix_a.get_row(1), vec![3., 4.]);
 
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_3, COLS_1);
-        matrix_a.assign(MATRIX_SAMPLE_3X1.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_3X1.to_vec());
 
         assert_eq!(matrix_a.get_row(0), vec![1.]);
         assert_eq!(matrix_a.get_row(1), vec![2.]);
         assert_eq!(matrix_a.get_row(2), vec![3.]);
 
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_2, COLS_3);
-        matrix_a.assign(MATRIX_SAMPLE_2X3.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_2X3.to_vec());
 
         assert_eq!(matrix_a.get_row(0), vec![1., 2., 3.]);
         assert_eq!(matrix_a.get_row(1), vec![4., 5., 6.]);
 
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_3, COLS_3);
-        matrix_a.assign(MATRIX_SAMPLE_3X3.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_3X3.to_vec());
 
         assert_eq!(matrix_a.get_row(0), vec![1., 2., 3.]);
         assert_eq!(matrix_a.get_row(1), vec![4., 5., 6.]);
@@ -616,7 +618,7 @@ mod tests {
     #[test]
     fn test_update_row() {
         let mut matrix_a: Matrix<f64> = Matrix::new(ROWS_3, COLS_1);
-        matrix_a.assign(MATRIX_SAMPLE_3X1.to_vec()).unwrap();
+        matrix_a.assign(MATRIX_SAMPLE_3X1.to_vec());
 
         assert_eq!(matrix_a.get_row(0), vec![1.]);
         assert_eq!(matrix_a.get_row(1), vec![2.]);
